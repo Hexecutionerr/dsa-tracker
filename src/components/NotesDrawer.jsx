@@ -4,34 +4,27 @@ import { X, FileText, Eye, Edit3, Clock, Hash, ExternalLink, Check, Save } from 
 import { marked } from 'marked';
 import { useSheetStore } from '../store';
 
-/* ── O(N) Linear Syntax Highlighting Engine ────── */
+/* ── O(N) Single-Pass Syntax Highlighting Engine ────── */
 function formatCodeSyntax(code) {
   if (!code) return '';
 
   // 1. HTML Escape
-  let html = String(code)
+  const html = String(code)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // 2. Highlight Single-line and Multi-line Comments safely
-  html = html.replace(/(\/\/[^\n]*|\/\*[\s\S]*?\*\/|#[^\n]*)/g, '<span class="code-cmnt">$&</span>');
+  // 2. Tokenize in a single pass so generated HTML tags are never re-processed
+  const tokenRegex = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|#[^\n]*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|(\b(?:class|public|private|protected|static|void|int|double|float|long|boolean|char|String|return|if|else|for|while|do|break|continue|new|import|package|try|catch|finally|throw|throws|interface|extends|implements|enum|final|null|true|false|const|let|var|function|def|self|lambda|auto|struct|include|using|namespace|std)\b)|(\b(?:Math|System|out|println|print|length|size|add|push|pop|get|set|contains|put|min|max|abs|sqrt|pow|console|log|vector|map|set|list|dict|range|len|enumerate|Arrays|Collections)\b)|(\b\d+(?:\.\d+)?\b)/g;
 
-  // 3. Highlight Strings safely (O(N) non-backtracking regex)
-  html = html.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '<span class="code-str">$&</span>');
-
-  // 4. Highlight Language Keywords
-  const keywords = /\b(class|public|private|protected|static|void|int|double|float|long|boolean|char|String|return|if|else|for|while|do|break|continue|new|import|package|try|catch|finally|throw|throws|interface|extends|implements|enum|final|null|true|false|const|let|var|function|def|self|lambda|auto|struct|include|using|namespace|std)\b/g;
-  html = html.replace(keywords, '<span class="code-kw">$1</span>');
-
-  // 5. Highlight Common Methods & Built-ins
-  const builtins = /\b(Math|System|out|println|print|length|size|add|push|pop|get|set|contains|put|min|max|abs|sqrt|pow|console|log|vector|map|set|list|dict|range|len|enumerate)\b/g;
-  html = html.replace(builtins, '<span class="code-bltn">$1</span>');
-
-  // 6. Highlight Numbers safely (never matching inside HTML tags)
-  html = html.replace(/\b(\d+)\b(?![^<]*>)/g, '<span class="code-num">$1</span>');
-
-  return html;
+  return html.replace(tokenRegex, (match, comment, string, keyword, builtin, number) => {
+    if (comment) return `<span class="code-cmnt">${comment}</span>`;
+    if (string) return `<span class="code-str">${string}</span>`;
+    if (keyword) return `<span class="code-kw">${keyword}</span>`;
+    if (builtin) return `<span class="code-bltn">${builtin}</span>`;
+    if (number) return `<span class="code-num">${number}</span>`;
+    return match;
+  });
 }
 
 /* ── Auto-wrap Raw Code into Fenced Code Blocks ─ */
